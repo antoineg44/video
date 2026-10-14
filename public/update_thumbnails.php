@@ -18,15 +18,16 @@ $ffmpeg = '/usr/bin/ffmpeg';
 $thumbnailWidth = 640;
 $thumbnailPosition = 10;
 
-// Vérification des dossiers
-if (!is_dir($videoDir)) {
-    exit("Erreur : dossier vidéo introuvable : $videoDir\n");
-}
-
+// Création du dossier des miniatures s'il n'existe pas
 if (!is_dir($thumbnailDir)) {
     if (!mkdir($thumbnailDir, 0755, true)) {
         exit("Erreur : impossible de créer le dossier des miniatures.\n");
     }
+}
+
+// Vérification des dossiers
+if (!is_dir($videoDir)) {
+    exit("Erreur : dossier vidéo introuvable : $videoDir\n");
 }
 
 if (!is_executable($ffmpeg)) {
