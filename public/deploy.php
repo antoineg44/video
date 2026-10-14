@@ -13,7 +13,7 @@ $branch_name = (String) trim($_GET['branch_name']);
 
 // Détermination robuste du chemin de destination à partir de l'emplacement du script.
 // Cela évite les problèmes lorsque PHP est lancé depuis un autre répertoire.
-$repoRoot = realpath(dirname(__DIR__, 2));
+$repoRoot = realpath(dirname(__DIR__, 1));
 $parentDir = dirname($repoRoot);
 
 if ($branch_name === "main") {
