@@ -189,13 +189,96 @@ if (
                 |--------------------------------------------------------------------------
                 */
         
-                $commande = 'nohup '
-                    . escapeshellarg(PHP_BINARY)
-                    . ' '
-                    . escapeshellarg($scriptMiseAJour)
-                    . ' >> '
-                    . escapeshellarg($fichierJournal)
-                    . ' 2>&1 < /dev/null &';
+                /*
+|--------------------------------------------------------------------------
+| Configuration de PHP CLI
+|--------------------------------------------------------------------------
+*/
+
+$phpCli = '/usr/bin/php';
+
+if (!is_file($phpCli) || !is_executable($phpCli)) {
+
+    $message = 'PHP CLI est introuvable ou inexécutable : '
+        . $phpCli;
+
+    $typeMessage = 'erreur';
+
+    error_log($message);
+
+} else {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Vérification des permissions du journal
+    |--------------------------------------------------------------------------
+    */
+
+    if (!is_writable($fichierJournal)) {
+
+        $message = 'Le journal de synchronisation '
+            . 'n\'est pas accessible en écriture.';
+
+        $typeMessage = 'erreur';
+
+    } else {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Construction de la commande
+        |--------------------------------------------------------------------------
+        */
+
+        $commande = 'nohup '
+            . escapeshellarg($phpCli)
+            . ' '
+            . escapeshellarg($scriptMiseAJour)
+            . ' >> '
+            . escapeshellarg($fichierJournal)
+            . ' 2>&1 < /dev/null &';
+
+        /*
+        |--------------------------------------------------------------------------
+        | Lancement de la synchronisation
+        |--------------------------------------------------------------------------
+        */
+
+        $sortie = [];
+
+        $codeRetour = 0;
+
+        exec(
+            $commande,
+            $sortie,
+            $codeRetour
+        );
+
+        if ($codeRetour === 0) {
+
+            $message = 'La commande de synchronisation a été envoyée.'
+                . "\n\n"
+                . 'Consulte le journal ci-dessous pour vérifier '
+                . 'que le script démarre et termine correctement.';
+
+            $typeMessage = 'succes';
+
+        } else {
+
+            $message = 'Impossible de lancer la synchronisation.'
+                . "\n\n"
+                . 'Code de retour : '
+                . $codeRetour;
+
+            $typeMessage = 'erreur';
+
+            error_log(
+                'Échec du lancement des miniatures. '
+                . 'Code : '
+                . $codeRetour
+            );
+        }
+    }
+}
         
                 /*
                 |--------------------------------------------------------------------------
