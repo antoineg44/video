@@ -142,52 +142,104 @@ if (
 
     } else {
         /*
-         * Journal de synchronisation.
-         */
-
+        |--------------------------------------------------------------------------
+        | Journal de synchronisation
+        |--------------------------------------------------------------------------
+        */
+        
         $fichierJournal = $repertoireMiniatures
             . '/update_thumbnails.log';
-
+        
         /*
-         * Commande exécutée en arrière-plan.
-         *
-         * Les chemins sont échappés pour éviter
-         * toute interprétation indésirable par le shell.
-         */
-
-        $commande = 'nohup '
-            . escapeshellarg(PHP_BINARY)
-            . ' '
-            . escapeshellarg($scriptMiseAJour)
-            . ' > '
-            . escapeshellarg($fichierJournal)
-            . ' 2>&1 < /dev/null &';
-
-        $sortie = [];
-        $codeRetour = 0;
-
-        exec(
-            $commande,
-            $sortie,
-            $codeRetour
-        );
-
-        if ($codeRetour === 0) {
-            $message = 'La synchronisation des miniatures a été lancée en arrière-plan. '
-                . 'Elle peut continuer après le chargement de cette page. '
-                . 'Consulte le journal du serveur pour vérifier son résultat.';
-
-            $typeMessage = 'succes';
-        } else {
-            $message = 'Impossible de lancer la synchronisation. '
-                . 'Vérifie la configuration PHP et les journaux du serveur.';
-
+        |--------------------------------------------------------------------------
+        | Vérification du journal
+        |--------------------------------------------------------------------------
+        */
+        
+        if (
+            !is_dir($repertoireMiniatures)
+            || !is_writable($repertoireMiniatures)
+        ) {
+            $message = 'Le répertoire des miniatures ne permet pas '
+                . 'de créer le journal de synchronisation.';
+        
             $typeMessage = 'erreur';
-
-            error_log(
-                'Échec du lancement de la synchronisation des miniatures.'
-            );
+        
+        } else {
+        
+            /*
+            |--------------------------------------------------------------------------
+            | Création du journal
+            |--------------------------------------------------------------------------
+            */
+        
+            if (file_put_contents(
+                $fichierJournal,
+                '[' . date('Y-m-d H:i:s') . "] Début de la synchronisation.\n"
+            ) === false) {
+        
+                $message = 'Impossible de créer le journal de synchronisation.';
+                $typeMessage = 'erreur';
+        
+            } else {
+        
+                /*
+                |--------------------------------------------------------------------------
+                | Construction de la commande
+                |--------------------------------------------------------------------------
+                */
+        
+                $commande = 'nohup '
+                    . escapeshellarg(PHP_BINARY)
+                    . ' '
+                    . escapeshellarg($scriptMiseAJour)
+                    . ' >> '
+                    . escapeshellarg($fichierJournal)
+                    . ' 2>&1 < /dev/null &';
+        
+                /*
+                |--------------------------------------------------------------------------
+                | Lancement du script
+                |--------------------------------------------------------------------------
+                */
+        
+                $sortie = [];
+        
+                $codeRetour = 0;
+        
+                exec(
+                    $commande,
+                    $sortie,
+                    $codeRetour
+                );
+        
+                if ($codeRetour === 0) {
+        
+                    $message = 'La synchronisation a été lancée.'
+                        . "\n\n"
+                        . 'Tu peux consulter les dernières informations '
+                        . 'ci-dessous pour vérifier son exécution.';
+        
+                    $typeMessage = 'succes';
+        
+                } else {
+        
+                    $message = 'Impossible de lancer la synchronisation.'
+                        . "\n\n"
+                        . 'Code de retour : '
+                        . $codeRetour;
+        
+                    $typeMessage = 'erreur';
+        
+                    error_log(
+                        'Échec du lancement de la synchronisation des miniatures. '
+                        . 'Code : '
+                        . $codeRetour
+                    );
+                }
+            }
         }
+
     }
 }
 /*
