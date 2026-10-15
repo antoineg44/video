@@ -402,12 +402,24 @@ foreach ($fichiers as $fichier) {
 
     $chemin = $repertoireVideos . '/' . $fichier;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Vérification du fichier
+    |--------------------------------------------------------------------------
+    */
+
     if (
         !is_file($chemin)
         || !is_readable($chemin)
     ) {
         continue;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Vérification de l'extension
+    |--------------------------------------------------------------------------
+    */
 
     $extension = strtolower(
         pathinfo(
@@ -423,28 +435,71 @@ foreach ($fichiers as $fichier) {
     )) {
         continue;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Date de référence de la vidéo
+    |--------------------------------------------------------------------------
+    |
+    | filemtime() retourne la date de dernière modification
+    | du fichier.
+    |
+    */
+
+    clearstatcache(true, $chemin);
+
+    $dateCreation = filemtime($chemin);
+
+    if ($dateCreation === false) {
+        $dateCreation = 0;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ajout de la vidéo au tableau
+    |--------------------------------------------------------------------------
+    */
+
+    $videos[] = [
+        'nom' => $fichier,
+        'chemin' => $chemin,
+        'extension' => $extension,
+        'date_creation' => $dateCreation,
+    ];
+}
+
 /*
 |--------------------------------------------------------------------------
-| Date de référence de la vidéo
+| Paramètres de tri
 |--------------------------------------------------------------------------
-|
-| filemtime() retourne la date de dernière modification du fichier.
-|
-| Sous Linux, cette date peut être modifiée avec :
-|
-| touch -d "2020-08-15 14:30:00" "/mnt/video/N43_c.mp4"
-|
-| Sur le montage NFS du Synology, nous utilisons donc
-| cette date comme date de référence de la vidéo.
-|
 */
 
-clearstatcache(true, $chemin);
+$triAutorise = [
+    'nom',
+    'date',
+];
 
-$dateCreation = filemtime($chemin);
+$ordreAutorise = [
+    'asc',
+    'desc',
+];
 
-if ($dateCreation === false) {
-    $dateCreation = 0;
+$tri = $_GET['tri'] ?? 'nom';
+
+$ordre = $_GET['ordre'] ?? 'asc';
+
+if (
+    !is_string($tri)
+    || !in_array($tri, $triAutorise, true)
+) {
+    $tri = 'nom';
+}
+
+if (
+    !is_string($ordre)
+    || !in_array($ordre, $ordreAutorise, true)
+) {
+    $ordre = 'asc';
 }
 
 /*
@@ -477,7 +532,7 @@ usort(
 
             /*
             |--------------------------------------------------------------------------
-            | Tri par date de création de référence
+            | Tri par date
             |--------------------------------------------------------------------------
             */
 
