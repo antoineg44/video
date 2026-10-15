@@ -101,6 +101,31 @@ $typeMessage = 'info';
 
 /*
 |--------------------------------------------------------------------------
+| Mode debug
+|--------------------------------------------------------------------------
+|
+| Désactivé par défaut.
+| Le choix est conservé dans la session.
+|
+*/
+
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['action'])
+    && $_POST['action'] === 'toggle_debug'
+) {
+    $_SESSION['videos_mode_debug'] = (
+        ($_POST['mode_debug'] ?? '0') === '1'
+    );
+}
+
+$modeDebug = (
+    $_SESSION['videos_mode_debug'] ?? false
+) === true;
+
+/*
+|--------------------------------------------------------------------------
 | Mise à jour des miniatures
 |--------------------------------------------------------------------------
 */
@@ -803,6 +828,50 @@ sort(
             background: #4b5563;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Outils de la bibliothèque vidéo
+        |--------------------------------------------------------------------------
+        */
+        
+        .outils-video {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+        
+        .formulaire-debug {
+            margin: 0;
+        }
+        
+        .label-debug {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #4b5563;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .label-debug input {
+            width: 17px;
+            height: 17px;
+            margin: 0;
+            accent-color: #2563eb;
+            cursor: pointer;
+        }
+        
+        @media (max-width: 600px) {
+            .outils-video {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 14px;
+            }
+        }
+
     </style>
 
 </head>
@@ -816,36 +885,76 @@ sort(
     <header class="entete">
 
         <h1>Bibliothèque vidéo</h1>
-
-        <form
-            method="post"
-            action=""
-            class="formulaire-mise-a-jour"
-            onsubmit="return confirmerMiseAJour(this);"
-        >
-
-            <input
-                type="hidden"
-                name="action"
-                value="update_thumbnails"
-            >
-
-            <input
-                type="hidden"
-                name="csrf_token"
-                value="<?= e($_SESSION['videos_csrf_token']) ?>"
-            >
-
-            <button
-                type="submit"
-                class="bouton-mise-a-jour"
-                id="boutonMiseAJour"
-            >
-                🔄 Mettre à jour les miniatures
-            </button>
-
-        </form>
-
+    
+        <div class="outils-video">
+    
+            <!-- Activation du mode debug -->
+    
+            <form method="post" action="" class="formulaire-debug">
+    
+                <input
+                    type="hidden"
+                    name="action"
+                    value="toggle_debug"
+                >
+    
+                <label class="label-debug">
+                    <input
+                        type="checkbox"
+                        name="mode_debug"
+                        value="1"
+                        <?= $modeDebug ? 'checked' : '' ?>
+                        onchange="activerModeDebug(this)"
+                    >
+    
+                    <span>Mode debug</span>
+                </label>
+    
+            </form>
+    
+            <!-- Bouton de mise à jour visible uniquement en mode debug -->
+    
+            <?php if ($modeDebug): ?>
+    
+                <form
+                    method="post"
+                    action=""
+                    class="formulaire-mise-a-jour"
+                    onsubmit="return confirmerMiseAJour(this);"
+                >
+    
+                    <input
+                        type="hidden"
+                        name="action"
+                        value="update_thumbnails"
+                    >
+    
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="<?= e($_SESSION['videos_csrf_token']) ?>"
+                    >
+    
+                    <input
+                        type="hidden"
+                        name="mode_debug"
+                        value="1"
+                    >
+    
+                    <button
+                        type="submit"
+                        class="bouton-mise-a-jour"
+                        id="boutonMiseAJour"
+                    >
+                        🔄 Mettre à jour les miniatures
+                    </button>
+    
+                </form>
+    
+            <?php endif; ?>
+    
+        </div>
+    
     </header>
 
     <!-- Compteur -->
@@ -917,7 +1026,7 @@ if (
 
 ?>
 
-<?php if ($contenuJournal !== ''): ?>
+<?php if ($modeDebug && $contenuJournal !== ''): ?>
 
     <section class="journal-synchronisation">
 
@@ -1089,6 +1198,25 @@ if (
 </div>
 
 <script>
+    function activerModeDebug(checkbox) {
+    
+        const formulaire = checkbox.form;
+    
+        /*
+         * Mémorise le choix en session via PHP.
+         */
+    
+        const input = document.createElement('input');
+    
+        input.type = 'hidden';
+        input.name = 'mode_debug';
+        input.value = checkbox.checked ? '1' : '0';
+    
+        formulaire.appendChild(input);
+    
+        formulaire.submit();
+    }
+    
     function confirmerMiseAJour(formulaire) {
 
         const confirmation = confirm(
