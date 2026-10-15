@@ -670,6 +670,56 @@ sort(
             }
 
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Journal de synchronisation
+        |--------------------------------------------------------------------------
+        */
+        
+        .journal-synchronisation {
+            margin: 20px 0;
+            padding: 20px;
+            background: #111827;
+            border-radius: 10px;
+            color: #e5e7eb;
+        }
+        
+        .journal-synchronisation h2 {
+            margin: 0 0 15px;
+            font-size: 18px;
+            color: #ffffff;
+        }
+        
+        .journal-synchronisation pre {
+            margin: 0 0 15px;
+            padding: 15px;
+            background: #030712;
+            border-radius: 6px;
+            color: #d1fae5;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 12px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            overflow-x: auto;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+        
+        .bouton-journal {
+            padding: 9px 14px;
+            border: none;
+            border-radius: 6px;
+            background: #374151;
+            color: #ffffff;
+            cursor: pointer;
+        }
+        
+        .bouton-journal:hover {
+            background: #4b5563;
+        }
+
     </style>
 
 </head>
@@ -736,6 +786,71 @@ sort(
         </div>
 
     <?php endif; ?>
+
+    <?php
+
+/*
+|--------------------------------------------------------------------------
+| Lecture du journal de synchronisation
+|--------------------------------------------------------------------------
+*/
+
+$contenuJournal = '';
+
+$fichierJournal = $repertoireMiniatures
+    . '/update_thumbnails.log';
+
+if (
+    is_file($fichierJournal)
+    && is_readable($fichierJournal)
+) {
+    $contenu = file_get_contents($fichierJournal);
+
+    if ($contenu !== false) {
+
+        /*
+         * Limite l'affichage aux 50 dernières lignes.
+         */
+
+        $lignes = preg_split(
+            '/\r\n|\r|\n/',
+            trim($contenu)
+        );
+
+        if ($lignes !== false) {
+
+            $lignes = array_slice(
+                $lignes,
+                -50
+            );
+
+            $contenuJournal = implode(
+                "\n",
+                $lignes
+            );
+        }
+    }
+}
+
+?>
+
+<?php if ($contenuJournal !== ''): ?>
+
+    <section class="journal-synchronisation">
+
+        <h2>Journal de synchronisation</h2>
+
+        <pre><?= e($contenuJournal) ?></pre>
+
+        <form method="get" action="">
+            <button type="submit" class="bouton-journal">
+                🔄 Actualiser le journal
+            </button>
+        </form>
+
+    </section>
+
+<?php endif; ?>
 
     <!-- Bibliothèque -->
 
