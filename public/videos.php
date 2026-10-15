@@ -423,35 +423,28 @@ foreach ($fichiers as $fichier) {
     )) {
         continue;
     }
+/*
+|--------------------------------------------------------------------------
+| Date de référence de la vidéo
+|--------------------------------------------------------------------------
+|
+| filemtime() retourne la date de dernière modification du fichier.
+|
+| Sous Linux, cette date peut être modifiée avec :
+|
+| touch -d "2020-08-15 14:30:00" "/mnt/video/N43_c.mp4"
+|
+| Sur le montage NFS du Synology, nous utilisons donc
+| cette date comme date de référence de la vidéo.
+|
+*/
 
-    /*
-    |--------------------------------------------------------------------------
-    | Date de référence du fichier
-    |--------------------------------------------------------------------------
-    |
-    | filectime() retourne la date du dernier changement
-    | d'état de l'inode sous Linux.
-    |
-    | Ce n'est pas nécessairement la véritable date de création.
-    |
-    */
+clearstatcache(true, $chemin);
 
-    $dateCreation = filectime($chemin);
+$dateCreation = filemtime($chemin);
 
-    if ($dateCreation === false) {
-        $dateCreation = filemtime($chemin);
-    }
-
-    if ($dateCreation === false) {
-        $dateCreation = 0;
-    }
-
-    $videos[] = [
-        'nom' => $fichier,
-        'chemin' => $chemin,
-        'extension' => $extension,
-        'date_creation' => $dateCreation,
-    ];
+if ($dateCreation === false) {
+    $dateCreation = 0;
 }
 
 /*
@@ -1645,23 +1638,17 @@ usort(
                     <header class="entete-video">
 
                         <div class="entete-video-informations">
-
-                            <span class="titre-video">
-                                <?= e($nomVideo) ?>
-                            </span>
-
+                    
                             <time
                                 class="date-video"
                                 datetime="<?= e(date('c', $dateCreation)) ?>"
-                                title="Date de référence du fichier"
+                                title="Date de modification du fichier"
                             >
                                 📅 <?= e($dateFormatee) ?>
                             </time>
-
+                    
                         </div>
-
-                        <!-- Bouton de modification avec icône crayon -->
-
+                    
                         <button
                             type="button"
                             class="bouton-modifier"
@@ -1677,7 +1664,7 @@ usort(
                                 )) ?>
                             )"
                         >
-
+                    
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 viewBox="0 0 24 24"
@@ -1688,19 +1675,12 @@ usort(
                                 stroke-linejoin="round"
                                 aria-hidden="true"
                             >
-
-                                <path
-                                    d="M12 20h9"
-                                />
-
-                                <path
-                                    d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"
-                                />
-
+                                <path d="M12 20h9"/>
+                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/>
                             </svg>
-
+                    
                         </button>
-
+                    
                     </header>
 
                     <!-- Miniature cliquable -->
