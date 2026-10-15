@@ -103,7 +103,6 @@ if (!$autorise) {
         }
 
         main {
-            width: min(900px, 90%);
             margin: 50px auto;
         }
 
