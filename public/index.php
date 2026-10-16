@@ -201,22 +201,9 @@ if (!$autorise) {
 
             <span class="statut">Accès autorisé</span>
 
-            <h1>
-                Bienvenue <?= e($identifiant) ?> !
-            </h1>
-
             <p>
-                Vous êtes connecté à Partitions Vidéo.
+                Bienvenue <?= e($identifiant) ?> dans votre bibliothèque vidéo !
             </p>
-
-            <p>
-                Votre compte est reconnu par le système
-                central d'authentification de Partitions.
-            </p>
-
-            <p>
-    Bienvenue dans votre bibliothèque vidéo.
-</p>
 
 <iframe
     src="videos.php"
