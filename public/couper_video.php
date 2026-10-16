@@ -266,13 +266,29 @@ if (
 
             $typeMessage = 'erreur';
 
-        } elseif (!is_writable($repertoireVideos)) {
+            clearstatcache(true, $repertoireVideos);
 
-            $message = 'Le répertoire vidéo n\'est pas accessible en écriture.';
+error_log(
+    'DIAGNOSTIC VIDEO : '
+    . 'repertoire=' . $repertoireVideos
+    . ' | existe=' . (is_dir($repertoireVideos) ? 'oui' : 'non')
+    . ' | writable=' . (is_writable($repertoireVideos) ? 'oui' : 'non')
+    . ' | uid=' . (function_exists('posix_geteuid') ? posix_geteuid() : 'inconnu')
+);
 
-            $typeMessage = 'erreur';
+        } elseif (!is_dir($repertoireVideos)) {
 
-        } else {
+    $message = 'Le répertoire vidéo est introuvable.';
+
+    $typeMessage = 'erreur';
+
+} elseif (!is_executable($repertoireVideos)) {
+
+    $message = 'Le répertoire vidéo n\'est pas accessible.';
+
+    $typeMessage = 'erreur';
+
+} else {
 
             /*
             |--------------------------------------------------------------------------
