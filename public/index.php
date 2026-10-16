@@ -111,6 +111,9 @@ if (!$autorise) {
             background: white;
             border-radius: 16px;
             box-shadow: 0 8px 30px rgba(20, 35, 65, .05);
+            position: absolute;
+            width: 100%;
+            height: 100%;
         }
 
         h1 {
@@ -177,6 +180,17 @@ if (!$autorise) {
 <header>
     <strong>Partitions Vidéo</strong>
 
+    <?php if ($autorise): ?>
+
+    <span class="statut">Accès autorisé</span>
+
+            <p>
+                Bienvenue <?= e($identifiant) ?> dans votre bibliothèque vidéo !
+            </p>
+
+    <?php endif; ?>
+
+
     <form method="POST" action="deconnexion.php">
         <input
             type="hidden"
@@ -198,13 +212,6 @@ if (!$autorise) {
     <section class="carte">
 
         <?php if ($autorise): ?>
-
-            <span class="statut">Accès autorisé</span>
-
-            <p>
-                Bienvenue <?= e($identifiant) ?> dans votre bibliothèque vidéo !
-            </p>
-
 <iframe
     src="videos.php"
     title="Bibliothèque vidéo"
@@ -216,6 +223,7 @@ if (!$autorise) {
         border: 0;
         border-radius: 12px;
         background: #f3f5f9;
+        height: 90%;
     "
 ></iframe>
 
