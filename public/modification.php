@@ -300,17 +300,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /*
                 |--------------------------------------------------------------------------
-                | Vérification des permissions
+                | Vérification du fichier
                 |--------------------------------------------------------------------------
                 */
-
-                if (!is_writable($cheminVideo)) {
-
-                    $message = 'PHP ne dispose pas des permissions '
-                        . 'nécessaires pour modifier la date de cette vidéo.';
-
+                
+                if (
+                    !is_file($cheminVideo)
+                    || !is_readable($cheminVideo)
+                ) {
+                
+                    $message = 'Le fichier vidéo est introuvable ou inaccessible.';
+                
                     $typeMessage = 'erreur';
-
+                
                 } else {
 
                     /*
