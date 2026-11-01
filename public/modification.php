@@ -1003,6 +1003,11 @@ $urlCouperVideo = $pageCouperVideo
             sont enregistrés dans description.json.
             Le fichier vidéo n'est jamais modifié.
         </p>
+        <p class="description">
+            Pour afficher en vert (Statut de la vidéo => Fini),
+            pour afficher en rouge (Statut de la vidéo => Problème),
+            pour afficher en jaune (Statut de la vidéo => A revoir)
+        </p>
 
         <form
             method="post"
