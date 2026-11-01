@@ -9,14 +9,21 @@ require_once '/var/www/compte/config/services.php';
 
 /*
 |--------------------------------------------------------------------------
-| Authentification
+| Configuration
 |--------------------------------------------------------------------------
 */
 
-if (!isset($_SESSION['utilisateur_id'])) {
-    http_response_code(401);
-    exit('Vous devez être connecté.');
-}
+$repertoireVideos = '/mnt/video';
+
+$fichierJSON = $repertoireVideos . '/description.json';
+
+$extensionsAutorisees = [
+    'mp4',
+    'webm',
+    'ogg',
+];
+
+$pageCouperVideo = 'couper_video.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +38,17 @@ function e(string $valeur): string
         ENT_QUOTES,
         'UTF-8'
     );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Authentification
+|--------------------------------------------------------------------------
+*/
+
+if (!isset($_SESSION['utilisateur_id'])) {
+    http_response_code(401);
+    exit('Vous devez être connecté.');
 }
 
 /*
@@ -65,25 +83,6 @@ if (!$autorise) {
     http_response_code(403);
     exit('Accès non autorisé.');
 }
-
-/*
-|--------------------------------------------------------------------------
-| Configuration
-|--------------------------------------------------------------------------
-*/
-
-$repertoireVideos = '/mnt/video';
-
-$extensionsAutorisees = [
-    'mp4',
-    'webm',
-    'ogg',
-];
-
-$ffmpeg = '/usr/bin/ffmpeg';
-$ffprobe = '/usr/bin/ffprobe';
-
-$pageCouperVideo = 'couper_video.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -141,7 +140,7 @@ if (!in_array(
 
 /*
 |--------------------------------------------------------------------------
-| Vérification du fichier
+| Vérification du fichier vidéo
 |--------------------------------------------------------------------------
 */
 
@@ -165,6 +164,7 @@ if (
     !isset($_SESSION['modification_video_csrf'])
     || !is_string($_SESSION['modification_video_csrf'])
 ) {
+
     $_SESSION['modification_video_csrf'] = bin2hex(
         random_bytes(32)
     );
@@ -174,65 +174,178 @@ $csrfToken = $_SESSION['modification_video_csrf'];
 
 /*
 |--------------------------------------------------------------------------
-| Messages
+| Lecture du fichier JSON
 |--------------------------------------------------------------------------
+|
+| Le fichier est verrouillé pendant la lecture.
+|
 */
 
-$message = '';
-$typeMessage = 'info';
+function lireDescriptions(string $fichier): array
+{
+    if (!file_exists($fichier)) {
+        return [];
+    }
 
-/*
-|--------------------------------------------------------------------------
-| Valeurs initiales des métadonnées
-|--------------------------------------------------------------------------
-*/
+    $contenu = file_get_contents($fichier);
 
-$statutVideo = '';
-$informationsVideo = '';
+    if ($contenu === false) {
+        throw new RuntimeException(
+            'Impossible de lire description.json.'
+        );
+    }
 
-/*
-|--------------------------------------------------------------------------
-| Fonction de lecture des métadonnées MP4
-|--------------------------------------------------------------------------
-*/
-
-function lireMetadonneesVideo(
-    string $chemin,
-    string $ffprobe
-): array {
-
-    $commande = escapeshellarg($ffprobe)
-        . ' -v error'
-        . ' -show_entries format_tags'
-        . ' -of json '
-        . escapeshellarg($chemin)
-        . ' 2>&1';
-
-    $sortie = [];
-
-    $codeRetour = 0;
-
-    exec(
-        $commande,
-        $sortie,
-        $codeRetour
-    );
-
-    if ($codeRetour !== 0) {
+    if (trim($contenu) === '') {
         return [];
     }
 
     $donnees = json_decode(
-        implode("\n", $sortie),
-        true
+        $contenu,
+        true,
+        512,
+        JSON_THROW_ON_ERROR
     );
 
     if (!is_array($donnees)) {
-        return [];
+        throw new RuntimeException(
+            'Structure du fichier JSON invalide.'
+        );
     }
 
-    return $donnees['format']['tags'] ?? [];
+    return $donnees;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Enregistrement sécurisé du fichier JSON
+|--------------------------------------------------------------------------
+|
+| Écriture temporaire puis remplacement atomique.
+|
+*/
+
+function enregistrerDescriptions(
+    string $fichier,
+    array $donnees
+): void {
+
+    $json = json_encode(
+        $donnees,
+        JSON_PRETTY_PRINT
+        | JSON_UNESCAPED_UNICODE
+        | JSON_UNESCAPED_SLASHES
+        | JSON_THROW_ON_ERROR
+    );
+
+    $repertoire = dirname($fichier);
+
+    $temporaire = tempnam(
+        $repertoire,
+        '.description_'
+    );
+
+    if ($temporaire === false) {
+        throw new RuntimeException(
+            'Impossible de créer le fichier temporaire.'
+        );
+    }
+
+    try {
+
+        if (file_put_contents(
+            $temporaire,
+            $json . PHP_EOL,
+            LOCK_EX
+        ) === false) {
+
+            throw new RuntimeException(
+                'Impossible d'écrire le fichier temporaire.'
+            );
+        }
+
+        if (!rename($temporaire, $fichier)) {
+
+            throw new RuntimeException(
+                'Impossible de remplacer description.json.'
+            );
+        }
+
+    } finally {
+
+        if (file_exists($temporaire)) {
+            unlink($temporaire);
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Modification sécurisée du JSON
+|--------------------------------------------------------------------------
+|
+| Un fichier de verrouillage indépendant protège
+| toutes les opérations de lecture et écriture.
+|
+*/
+
+function modifierDescription(
+    string $fichier,
+    string $nomVideo,
+    string $statut,
+    string $description
+): void {
+
+    $verrou = $fichier . '.lock';
+
+    $handle = fopen($verrou, 'c');
+
+    if ($handle === false) {
+        throw new RuntimeException(
+            'Impossible de créer le verrou JSON.'
+        );
+    }
+
+    try {
+
+        if (!flock($handle, LOCK_EX)) {
+            throw new RuntimeException(
+                'Impossible de verrouiller le fichier JSON.'
+            );
+        }
+
+        $donnees = lireDescriptions($fichier);
+
+        $donnees[$nomVideo] = [
+            'statut' => $statut,
+            'description' => $description
+        ];
+
+        enregistrerDescriptions(
+            $fichier,
+            $donnees
+        );
+
+        flock($handle, LOCK_UN);
+
+    } finally {
+
+        fclose($handle);
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Récupération des informations initiales
+|--------------------------------------------------------------------------
+*/
+
+$message = '';
+
+$typeMessage = 'info';
+
+$statutVideo = '';
+
+$informationsVideo = '';
 
 /*
 |--------------------------------------------------------------------------
@@ -245,12 +358,6 @@ $dateModification = filemtime($cheminVideo);
 if ($dateModification === false) {
     $dateModification = time();
 }
-
-/*
-|--------------------------------------------------------------------------
-| Valeur initiale du champ date
-|--------------------------------------------------------------------------
-*/
 
 $dateFormulaire = date(
     'Y-m-d\TH:i',
@@ -275,12 +382,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (
         !is_string($token)
-        || !hash_equals(
-            $csrfToken,
-            $token
-        )
+        || !hash_equals($csrfToken, $token)
     ) {
+
         http_response_code(403);
+
         exit('Jeton de sécurité invalide. Rechargez la page.');
     }
 
@@ -288,11 +394,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /*
     |--------------------------------------------------------------------------
+    | Action : modifier les informations JSON
+    |--------------------------------------------------------------------------
+    */
+
+    if ($action === 'modifier_metadonnees') {
+
+        $nouveauStatut = $_POST['statut_video'] ?? '';
+
+        $nouvellesInformations = $_POST['informations_video'] ?? '';
+
+        if (
+            !is_string($nouveauStatut)
+            || mb_strlen($nouveauStatut, 'UTF-8') > 255
+        ) {
+
+            $message = 'Le statut est invalide ou dépasse 255 caractères.';
+
+            $typeMessage = 'erreur';
+
+        } elseif (
+            !is_string($nouvellesInformations)
+            || mb_strlen($nouvellesInformations, 'UTF-8') > 5000
+        ) {
+
+            $message = 'Les informations sont invalides ou dépassent 5000 caractères.';
+
+            $typeMessage = 'erreur';
+
+        } else {
+
+            try {
+
+                modifierDescription(
+                    $fichierJSON,
+                    $nomVideo,
+                    $nouveauStatut,
+                    $nouvellesInformations
+                );
+
+                $statutVideo = $nouveauStatut;
+
+                $informationsVideo = $nouvellesInformations;
+
+                $message = 'Les informations de la vidéo ont été enregistrées avec succès.';
+
+                $typeMessage = 'succes';
+
+            } catch (Throwable $exception) {
+
+                error_log(
+                    'Erreur description.json : '
+                    . $exception->getMessage()
+                );
+
+                $message = 'Impossible d\'enregistrer les informations. Vérifiez les permissions du répertoire NFS.';
+
+                $typeMessage = 'erreur';
+
+                $statutVideo = $nouveauStatut;
+
+                $informationsVideo = $nouvellesInformations;
+            }
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Action : modifier la date
     |--------------------------------------------------------------------------
     */
 
-    if ($action === 'modifier_date') {
+    elseif ($action === 'modifier_date') {
 
         $dateSaisie = $_POST['date_creation'] ?? '';
 
@@ -302,15 +475,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ) {
 
             $message = 'Veuillez saisir une date.';
+
             $typeMessage = 'erreur';
 
         } else {
-
-            /*
-            |--------------------------------------------------------------------------
-            | Validation stricte de la date
-            |--------------------------------------------------------------------------
-            */
 
             $dateObjet = DateTimeImmutable::createFromFormat(
                 '!Y-m-d\TH:i',
@@ -334,6 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$dateValide) {
 
                 $message = 'La date saisie est invalide.';
+
                 $typeMessage = 'erreur';
 
             } else {
@@ -342,192 +511,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'Y-m-d H:i:s'
                 );
 
-                if (
-                    !is_file($cheminVideo)
-                    || !is_readable($cheminVideo)
-                ) {
-
-                    $message = 'Le fichier vidéo est introuvable ou inaccessible.';
-                    $typeMessage = 'erreur';
-
-                } else {
-
-                    $commande = '/usr/bin/touch -m -d '
-                        . escapeshellarg($datePourTouch)
-                        . ' '
-                        . escapeshellarg($cheminVideo)
-                        . ' 2>&1';
-
-                    $sortie = [];
-
-                    $codeRetour = 0;
-
-                    exec(
-                        $commande,
-                        $sortie,
-                        $codeRetour
-                    );
-
-                    if ($codeRetour === 0) {
-
-                        clearstatcache(
-                            true,
-                            $cheminVideo
-                        );
-
-                        $nouvelleDate = filemtime(
-                            $cheminVideo
-                        );
-
-                        if ($nouvelleDate !== false) {
-
-                            $dateModification = $nouvelleDate;
-
-                            $dateFormulaire = date(
-                                'Y-m-d\TH:i',
-                                $nouvelleDate
-                            );
-
-                            $message = 'La date de modification de la vidéo a été mise à jour.';
-
-                            $typeMessage = 'succes';
-
-                        } else {
-
-                            $message = 'La commande a été exécutée, mais la nouvelle date est illisible.';
-
-                            $typeMessage = 'erreur';
-                        }
-
-                    } else {
-
-                        $detailsErreur = implode(
-                            "\n",
-                            $sortie
-                        );
-
-                        $message = 'Impossible de modifier la date de la vidéo.';
-
-                        if ($detailsErreur !== '') {
-                            $message .= "\n" . $detailsErreur;
-                        }
-
-                        $typeMessage = 'erreur';
-
-                        error_log(
-                            'Erreur touch sur '
-                            . $cheminVideo
-                            . ' : '
-                            . $detailsErreur
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Action : modifier les métadonnées vidéo
-    |--------------------------------------------------------------------------
-    */
-
-    elseif ($action === 'modifier_metadonnees') {
-
-        $nouveauStatut = $_POST['statut_video'] ?? '';
-
-        $nouvellesInformations = $_POST['informations_video'] ?? '';
-
-        /*
-        |--------------------------------------------------------------------------
-        | Validation des champs
-        |--------------------------------------------------------------------------
-        */
-
-        if ($extension !== 'mp4') {
-
-            $message = 'Cette fonctionnalité est réservée aux fichiers MP4.';
-            $typeMessage = 'erreur';
-
-        } elseif (
-            !is_string($nouveauStatut)
-            || mb_strlen($nouveauStatut, 'UTF-8') > 255
-        ) {
-
-            $message = 'Le statut est invalide ou dépasse 255 caractères.';
-            $typeMessage = 'erreur';
-
-        } elseif (
-            !is_string($nouvellesInformations)
-            || mb_strlen($nouvellesInformations, 'UTF-8') > 5000
-        ) {
-
-            $message = 'Les informations sont invalides ou dépassent 5000 caractères.';
-            $typeMessage = 'erreur';
-
-        } elseif (!is_executable($ffmpeg)) {
-
-            $message = 'FFmpeg est introuvable ou inaccessible.';
-            $typeMessage = 'erreur';
-
-        } else {
-
-            /*
-            |--------------------------------------------------------------------------
-            | Récupération des informations du fichier
-            |--------------------------------------------------------------------------
-            */
-
-            clearstatcache(true, $cheminVideo);
-
-            $ancienMtime = filemtime($cheminVideo);
-
-            $permissions = fileperms($cheminVideo);
-
-            if (
-                $ancienMtime === false
-                || $permissions === false
-            ) {
-
-                $message = 'Impossible de lire les informations du fichier.';
-                $typeMessage = 'erreur';
-
-            } else {
-
-                /*
-                |--------------------------------------------------------------------------
-                | Création du fichier temporaire
-                |--------------------------------------------------------------------------
-                */
-
-                $fichierTemporaire = $repertoireVideos
-                    . '/.metadata_'
-                    . bin2hex(random_bytes(12))
-                    . '.mp4';
-
-                /*
-                |--------------------------------------------------------------------------
-                | Construction de la commande FFmpeg
-                |--------------------------------------------------------------------------
-                */
-
-                $commande = escapeshellarg($ffmpeg)
-                    . ' -nostdin'
-                    . ' -hide_banner'
-                    . ' -loglevel error'
-                    . ' -y'
-                    . ' -i '
-                    . escapeshellarg($cheminVideo)
-                    . ' -map 0'
-                    . ' -c copy'
-                    . ' -map_metadata 0'
-                    . ' -movflags use_metadata_tags'
-                    . ' -metadata '
-                    . escapeshellarg('status=' . $nouveauStatut)
-                    . ' -metadata '
-                    . escapeshellarg('description=' . $nouvellesInformations)
+                $commande = '/usr/bin/touch -m -d '
+                    . escapeshellarg($datePourTouch)
                     . ' '
-                    . escapeshellarg($fichierTemporaire)
+                    . escapeshellarg($cheminVideo)
                     . ' 2>&1';
 
                 $sortie = [];
@@ -540,143 +527,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $codeRetour
                 );
 
-                /*
-                |--------------------------------------------------------------------------
-                | Vérification du résultat
-                |--------------------------------------------------------------------------
-                */
+                if ($codeRetour === 0) {
 
-                if (
-                    $codeRetour === 0
-                    && is_file($fichierTemporaire)
-                    && filesize($fichierTemporaire) > 0
-                ) {
+                    clearstatcache(true, $cheminVideo);
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Conservation des permissions
-                    |--------------------------------------------------------------------------
-                    */
+                    $nouvelleDate = filemtime($cheminVideo);
 
-                    if (!chmod(
-                        $fichierTemporaire,
-                        $permissions & 0777
-                    )) {
+                    if ($nouvelleDate !== false) {
 
-                        @unlink($fichierTemporaire);
+                        $dateModification = $nouvelleDate;
 
-                        $message = 'Impossible de conserver les permissions du fichier vidéo.';
-                        $typeMessage = 'erreur';
-
-                    } elseif (
-                        !rename(
-                            $fichierTemporaire,
-                            $cheminVideo
-                        )
-                    ) {
-
-                        @unlink($fichierTemporaire);
-
-                        $message = 'Impossible de remplacer le fichier vidéo original.';
-                        $typeMessage = 'erreur';
-
-                    } else {
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Restauration de la date de modification
-                        |--------------------------------------------------------------------------
-                        */
-
-                        if (!touch(
-                            $cheminVideo,
-                            $ancienMtime
-                        )) {
-
-                            error_log(
-                                'Impossible de restaurer mtime : '
-                                . $cheminVideo
-                            );
-                        }
-
-                        clearstatcache(
-                            true,
-                            $cheminVideo
+                        $dateFormulaire = date(
+                            'Y-m-d\TH:i',
+                            $nouvelleDate
                         );
 
-                        $message = 'Les informations de la vidéo ont été enregistrées avec succès.';
+                        $message = 'La date de modification de la vidéo a été mise à jour.';
 
                         $typeMessage = 'succes';
 
-                        $statutVideo = $nouveauStatut;
+                    } else {
 
-                        $informationsVideo = $nouvellesInformations;
+                        $message = 'La nouvelle date est illisible.';
+
+                        $typeMessage = 'erreur';
                     }
 
                 } else {
 
-                    @unlink($fichierTemporaire);
+                    $detailsErreur = implode("\n", $sortie);
 
-                    $detailsErreur = implode(
-                        "\n",
-                        $sortie
-                    );
-
-                    $message = 'Erreur lors de l\'enregistrement des métadonnées.';
+                    $message = 'Impossible de modifier la date de la vidéo.';
 
                     $typeMessage = 'erreur';
 
                     error_log(
-                        'Erreur FFmpeg métadonnées : '
-                        . $cheminVideo
-                        . ' : '
+                        'Erreur touch : '
                         . $detailsErreur
                     );
                 }
             }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Conservation des valeurs saisies
-        |--------------------------------------------------------------------------
-        */
-
-        if ($typeMessage === 'erreur') {
-
-            $statutVideo = is_string($nouveauStatut)
-                ? $nouveauStatut
-                : '';
-
-            $informationsVideo = is_string($nouvellesInformations)
-                ? $nouvellesInformations
-                : '';
         }
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Lecture des métadonnées existantes
+| Lecture des informations JSON
 |--------------------------------------------------------------------------
 */
 
-if ($extension === 'mp4') {
+if (
+    $_SERVER['REQUEST_METHOD'] !== 'POST'
+    || (
+        isset($action)
+        && $action !== 'modifier_metadonnees'
+    )
+) {
 
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    try {
 
-        if (is_executable($ffprobe)) {
+        $donneesJSON = lireDescriptions($fichierJSON);
 
-            $metadonnees = lireMetadonneesVideo(
-                $cheminVideo,
-                $ffprobe
-            );
+        $informationsExistantes = $donneesJSON[$nomVideo] ?? [];
 
-            $statutVideo = $metadonnees['status'] ?? '';
+        if (is_array($informationsExistantes)) {
 
-            $informationsVideo = $metadonnees['description'] ?? '';
+            $statutVideo = $informationsExistantes['statut'] ?? '';
 
+            $informationsVideo = $informationsExistantes['description'] ?? '';
         }
+
+    } catch (Throwable $exception) {
+
+        error_log(
+            'Erreur lecture JSON : '
+            . $exception->getMessage()
+        );
+
+        $message = 'Impossible de lire description.json.';
+
+        $typeMessage = 'erreur';
     }
 }
 
@@ -688,14 +619,9 @@ if ($extension === 'mp4') {
 
 $nomAffiche = $nomVideo;
 
-clearstatcache(
-    true,
-    $cheminVideo
-);
+clearstatcache(true, $cheminVideo);
 
-$dateModificationActuelle = filemtime(
-    $cheminVideo
-);
+$dateModificationActuelle = filemtime($cheminVideo);
 
 if ($dateModificationActuelle === false) {
     $dateModificationActuelle = $dateModification;
@@ -752,12 +678,6 @@ $urlCouperVideo = $pageCouperVideo
             margin: 0 auto;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | En-tête
-        |--------------------------------------------------------------------------
-        */
-
         .entete {
             margin-bottom: 25px;
         }
@@ -778,12 +698,6 @@ $urlCouperVideo = $pageCouperVideo
             line-height: 1.6;
             overflow-wrap: anywhere;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Cartes
-        |--------------------------------------------------------------------------
-        */
 
         .carte {
             margin-bottom: 20px;
@@ -806,12 +720,6 @@ $urlCouperVideo = $pageCouperVideo
             line-height: 1.7;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Formulaire
-        |--------------------------------------------------------------------------
-        */
-
         .groupe-champ {
             margin-bottom: 18px;
         }
@@ -825,8 +733,8 @@ $urlCouperVideo = $pageCouperVideo
         }
 
         .champ-date,
-        .champ-texte,
-        .champ-statut {
+        .champ-statut,
+        .champ-texte {
             display: block;
             width: 100%;
             padding: 12px;
@@ -849,8 +757,8 @@ $urlCouperVideo = $pageCouperVideo
         }
 
         .champ-date:focus,
-        .champ-texte:focus,
-        .champ-statut:focus {
+        .champ-statut:focus,
+        .champ-texte:focus {
             outline: 3px solid rgba(37, 99, 235, .15);
             border-color: #2563eb;
         }
@@ -860,12 +768,6 @@ $urlCouperVideo = $pageCouperVideo
             color: #6b7280;
             font-size: 12px;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Boutons
-        |--------------------------------------------------------------------------
-        */
 
         .actions {
             display: flex;
@@ -907,12 +809,6 @@ $urlCouperVideo = $pageCouperVideo
             background: #b91c1c;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Messages
-        |--------------------------------------------------------------------------
-        */
-
         .message {
             margin-bottom: 20px;
             padding: 14px 16px;
@@ -941,12 +837,6 @@ $urlCouperVideo = $pageCouperVideo
             color: #1e40af;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Date actuelle
-        |--------------------------------------------------------------------------
-        */
-
         .information-date {
             margin-top: 18px;
             padding: 14px;
@@ -962,12 +852,6 @@ $urlCouperVideo = $pageCouperVideo
             color: #111827;
             font-weight: 700;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Responsive
-        |--------------------------------------------------------------------------
-        */
 
         @media (max-width: 500px) {
 
@@ -1110,104 +994,95 @@ $urlCouperVideo = $pageCouperVideo
 
     <!-- Informations de la vidéo -->
 
-    <?php if ($extension === 'mp4'): ?>
+    <section class="carte">
 
-        <section class="carte">
+        <h2>📋 Informations de la vidéo</h2>
 
-            <h2>📋 Informations de la vidéo</h2>
+        <p class="description">
+            Le statut et les informations complémentaires
+            sont enregistrés dans description.json.
+            Le fichier vidéo n'est jamais modifié.
+        </p>
 
-            <p class="description">
-                Tu peux saisir librement le statut de cette vidéo
-                ainsi que des informations complémentaires.
-                Ces données seront enregistrées directement
-                dans les métadonnées du fichier MP4.
-            </p>
+        <form
+            method="post"
+            action="<?= e(
+                basename(__FILE__)
+                . '?f='
+                . rawurlencode($nomVideo)
+            ) ?>"
+        >
 
-            <form
-                method="post"
-                action="<?= e(
-                    basename(__FILE__)
-                    . '?f='
-                    . rawurlencode($nomVideo)
-                ) ?>"
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="<?= e($csrfToken) ?>"
             >
 
-                <input
-                    type="hidden"
-                    name="csrf_token"
-                    value="<?= e($csrfToken) ?>"
-                >
+            <input
+                type="hidden"
+                name="action"
+                value="modifier_metadonnees"
+            >
+
+            <div class="groupe-champ">
+
+                <label for="statut_video">
+                    Statut de la vidéo
+                </label>
 
                 <input
-                    type="hidden"
-                    name="action"
-                    value="modifier_metadonnees"
+                    type="text"
+                    id="statut_video"
+                    name="statut_video"
+                    class="champ-statut"
+                    maxlength="255"
+                    value="<?= e($statutVideo) ?>"
+                    placeholder="Saisir le statut de la vidéo..."
                 >
 
-                <!-- Statut -->
+            </div>
 
-                <div class="groupe-champ">
+            <div class="groupe-champ">
 
-                    <label for="statut_video">
-                        Statut de la vidéo
-                    </label>
+                <label for="informations_video">
+                    Informations complémentaires
+                </label>
 
-                    <input
-                        type="text"
-                        id="statut_video"
-                        name="statut_video"
-                        class="champ-statut"
-                        maxlength="255"
-                        value="<?= e($statutVideo) ?>"
-                        placeholder="Saisir le statut de la vidéo..."
-                    >
+                <textarea
+                    id="informations_video"
+                    name="informations_video"
+                    class="champ-texte"
+                    maxlength="5000"
+                    placeholder="Ajouter des informations complémentaires..."
+                ><?= e($informationsVideo) ?></textarea>
 
-                </div>
+                <div class="compteur-caracteres">
 
-                <!-- Informations complémentaires -->
+                    <span id="compteur">
+                        <?= e((string) mb_strlen($informationsVideo, 'UTF-8')) ?>
+                    </span>
 
-                <div class="groupe-champ">
-
-                    <label for="informations_video">
-                        Informations complémentaires
-                    </label>
-
-                    <textarea
-                        id="informations_video"
-                        name="informations_video"
-                        class="champ-texte"
-                        maxlength="5000"
-                        placeholder="Ajouter des informations complémentaires sur cette vidéo..."
-                    ><?= e($informationsVideo) ?></textarea>
-
-                    <div class="compteur-caracteres">
-
-                        <span id="compteur">
-                            <?= e((string) mb_strlen($informationsVideo, 'UTF-8')) ?>
-                        </span>
-
-                        / 5000 caractères
-
-                    </div>
+                    / 5000 caractères
 
                 </div>
 
-                <div class="actions">
+            </div>
 
-                    <button
-                        type="submit"
-                        class="bouton bouton-principal"
-                    >
-                        💾 Enregistrer les informations
-                    </button>
+            <div class="actions">
 
-                </div>
+                <button
+                    type="submit"
+                    class="bouton bouton-principal"
+                >
+                    💾 Enregistrer les informations
+                </button>
 
-            </form>
+            </div>
 
-        </section>
+        </form>
 
-    <?php endif; ?>
+    </section>
 
     <!-- Découpage de la vidéo -->
 
