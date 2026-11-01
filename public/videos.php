@@ -1128,6 +1128,58 @@ usort(
         }
 
         /*
+|--------------------------------------------------------------------------
+| Boutons d'action vidéo
+|--------------------------------------------------------------------------
+*/
+
+.actions-video {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.bouton-telecharger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #16a34a;
+    cursor: pointer;
+    text-decoration: none;
+    transition:
+        background .2s,
+        color .2s,
+        border-color .2s,
+        transform .2s;
+}
+
+.bouton-telecharger:hover {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+    transform: scale(1.05);
+}
+
+.bouton-telecharger:focus-visible {
+    outline: 3px solid rgba(22, 163, 74, .3);
+    outline-offset: 2px;
+}
+
+.bouton-telecharger svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+}
+
+
+        /*
         |--------------------------------------------------------------------------
         | Fenêtre modale de modification
         |--------------------------------------------------------------------------
@@ -1326,6 +1378,20 @@ usort(
             .modale-titre {
                 font-size: 15px;
             }
+            .actions-video {
+    gap: 4px;
+}
+
+.bouton-telecharger {
+    width: 30px;
+    height: 30px;
+}
+
+.bouton-telecharger svg {
+    width: 15px;
+    height: 15px;
+}
+
         }
 
         @media (max-width: 360px) {
@@ -1805,37 +1871,70 @@ switch ($statutVideo) {
                     
                         </div>
                     
-                        <button
-                            type="button"
-                            class="bouton-modifier"
-                            title="Modifier cette vidéo"
-                            aria-label="Modifier la vidéo <?= e($nomVideo) ?>"
-                            onclick="ouvrirModification(
-                                <?= e(json_encode(
-                                    $urlModification,
-                                    JSON_HEX_TAG
-                                    | JSON_HEX_APOS
-                                    | JSON_HEX_QUOT
-                                    | JSON_HEX_AMP
-                                )) ?>
-                            )"
-                        >
-                    
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                aria-hidden="true"
-                            >
-                                <path d="M12 20h9"/>
-                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/>
-                            </svg>
-                    
-                        </button>
+                        <div class="actions-video">
+
+    <!-- Bouton Télécharger -->
+
+    <a
+        href="telecharger.php?f=<?= rawurlencode($nomVideo) ?>"
+        class="bouton-telecharger"
+        title="Télécharger cette vidéo"
+        aria-label="Télécharger la vidéo <?= e($nomVideo) ?>"
+    >
+
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+        >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="M7 10l5 5 5-5"/>
+            <path d="M12 15V3"/>
+        </svg>
+
+    </a>
+
+    <!-- Bouton Modifier -->
+
+    <button
+        type="button"
+        class="bouton-modifier"
+        title="Modifier cette vidéo"
+        aria-label="Modifier la vidéo <?= e($nomVideo) ?>"
+        onclick="ouvrirModification(
+            <?= e(json_encode(
+                $urlModification,
+                JSON_HEX_TAG
+                | JSON_HEX_APOS
+                | JSON_HEX_QUOT
+                | JSON_HEX_AMP
+            )) ?>
+        )"
+    >
+
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+        >
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/>
+        </svg>
+
+    </button>
+
+</div>
+
                     
                     </header>
 
