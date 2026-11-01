@@ -259,7 +259,7 @@ function enregistrerDescriptions(
         ) === false) {
 
             throw new RuntimeException(
-                'Impossible d'écrire le fichier temporaire.'
+                'Impossible d\'écrire le fichier temporaire.'
             );
         }
 
