@@ -1418,6 +1418,137 @@ usort(
     box-shadow: 0 8px 24px rgba(20, 35, 65, .12);
 }
 
+/*
+|--------------------------------------------------------------------------
+| Panneau d'informations au survol
+|--------------------------------------------------------------------------
+*/
+
+.video {
+    position: relative;
+}
+
+/* Panneau */
+
+.video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+
+    display: flex;
+    align-items: flex-start;
+
+    padding: 12px;
+
+    background: rgba(15, 23, 42, .94);
+    color: #fff;
+
+    opacity: 0;
+    visibility: hidden;
+
+    transform: translateY(-5px);
+
+    transition:
+        opacity .25s ease,
+        visibility .25s ease,
+        transform .25s ease;
+
+    pointer-events: none;
+}
+
+/* Affichage au survol */
+
+.video:hover .video-overlay {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* Contenu */
+
+.video-overlay-contenu {
+    width: 100%;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+/* Statut */
+
+.video-overlay-statut {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+
+    margin-bottom: 10px;
+
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* Pastille de couleur */
+
+.pastille-statut {
+    display: inline-block;
+    flex-shrink: 0;
+
+    width: 11px;
+    height: 11px;
+
+    border-radius: 50%;
+}
+
+/* Description */
+
+.video-overlay-description {
+    padding-top: 9px;
+
+    border-top: 1px solid rgba(255, 255, 255, .2);
+
+    font-size: 12px;
+    line-height: 1.6;
+
+    color: #e5e7eb;
+
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* Absence de statut ou de description */
+
+.statut-absent {
+    color: #9ca3af;
+}
+
+.description-absente {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Smartphone et tablette
+|--------------------------------------------------------------------------
+*/
+
+@media (hover: none) {
+
+    .video-overlay {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+
+        position: relative;
+
+        background: #1e293b;
+    }
+
+    .video-overlay-contenu {
+        max-height: 120px;
+    }
+
+}
 
     </style>
 
@@ -1811,6 +1942,40 @@ if (!is_string($statutVideo)) {
     $statutVideo = '';
 }
 
+$descriptionVideo = $informationsVideo['description'] ?? '';
+
+if (!is_string($descriptionVideo)) {
+    $descriptionVideo = '';
+}
+
+/*
+|--------------------------------------------------------------------------
+| Couleur du statut
+|--------------------------------------------------------------------------
+*/
+
+$couleurBordure = '';
+$couleurStatut = '';
+
+switch ($statutVideo) {
+
+    case 'Problème':
+        $couleurBordure = '#fecaca';
+        $couleurStatut = '#dc2626';
+        break;
+
+    case 'Fini':
+        $couleurBordure = '#bbf7d0';
+        $couleurStatut = '#16a34a';
+        break;
+
+    case 'A revoir':
+        $couleurBordure = '#fde68a';
+        $couleurStatut = '#d97706';
+        break;
+}
+
+
 $couleurBordure = '';
 
 switch ($statutVideo) {
@@ -1981,6 +2146,56 @@ switch ($statutVideo) {
                         </span>
 
                     </a>
+
+                    <!-- Informations affichées au survol -->
+
+<div class="video-overlay">
+
+    <div class="video-overlay-contenu">
+
+        <?php if ($statutVideo !== ''): ?>
+
+            <div class="video-overlay-statut">
+
+                <span
+                    class="pastille-statut"
+                    style="background-color: <?= e($couleurStatut !== '' ? $couleurStatut : '#6b7280') ?>;"
+                ></span>
+
+                <strong>
+                    <?= e($statutVideo) ?>
+                </strong>
+
+            </div>
+
+        <?php else: ?>
+
+            <div class="video-overlay-statut statut-absent">
+                Aucun statut renseigné
+            </div>
+
+        <?php endif; ?>
+
+        <?php if ($descriptionVideo !== ''): ?>
+
+            <div class="video-overlay-description">
+
+                <?= nl2br(e($descriptionVideo)) ?>
+
+            </div>
+
+        <?php else: ?>
+
+            <div class="video-overlay-description description-absente">
+                Aucune information complémentaire.
+            </div>
+
+        <?php endif; ?>
+
+    </div>
+
+</div>
+
 
                     <!-- Informations complémentaires -->
 
